@@ -29,6 +29,8 @@ const SUGGESTIONS = [
   { title: 'Напиши письмо', sub: 'деловое и вежливое', icon: 'PenLine' },
 ];
 
+const CHAT_URL = 'https://functions.poehali.dev/aa67ebed-6769-4b20-ad01-f52f6fd9e989';
+
 const Index = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -40,23 +42,39 @@ const Index = () => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, thinking]);
 
-  const send = (text: string) => {
-    if (!text.trim()) return;
+  const send = async (text: string) => {
+    if (!text.trim() || thinking) return;
     const userMsg: Message = { id: Date.now(), role: 'user', text };
-    setMessages((m) => [...m, userMsg]);
+    const history = [...messages, userMsg];
+    setMessages(history);
     setInput('');
     setThinking(true);
-    setTimeout(() => {
-      setThinking(false);
+    try {
+      const res = await fetch(CHAT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: model.id,
+          messages: history.map((m) => ({ role: m.role, text: m.text })),
+        }),
+      });
+      const data = await res.json();
       setMessages((m) => [
         ...m,
         {
           id: Date.now() + 1,
           role: 'assistant',
-          text: 'Это демонстрационный ответ помощника. Скоро я подключу настоящую модель и внешние сервисы — и я буду отвечать по-настоящему.',
+          text: data.reply || 'Не удалось получить ответ. Проверь, что подключён ключ нейросети.',
         },
       ]);
-    }, 1400);
+    } catch {
+      setMessages((m) => [
+        ...m,
+        { id: Date.now() + 1, role: 'assistant', text: 'Ошибка связи с сервером. Попробуй ещё раз.' },
+      ]);
+    } finally {
+      setThinking(false);
+    }
   };
 
   const hasChat = messages.length > 0;
